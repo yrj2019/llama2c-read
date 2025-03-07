@@ -144,12 +144,22 @@ void read_checkpoint(char* checkpoint, Config* config, TransformerWeights* weigh
     FILE *file = fopen(checkpoint, "rb");
     if (!file) { fprintf(stderr, "Couldn't open file %s\n", checkpoint); exit(EXIT_FAILURE); }
     // read in the config header
+    // size_t fread(void * buffer, size_t size, size_t count, FILE * stream)
+    // buffer: pointer to the dst buffer to store
+    // size: size of each element in bytes
+    // count: count of element to read
+    // stream: pointer to the file stream
     if (fread(config, sizeof(Config), 1, file) != 1) { exit(EXIT_FAILURE); }
     // negative vocab size is hacky way of signaling unshared weights. bit yikes.
     int shared_weights = config->vocab_size > 0 ? 1 : 0;
     config->vocab_size = abs(config->vocab_size);
     // figure out the file size
+    // int fseek(FILE *stream, long int offset, int whence)
+    // stream: pointer to the file stream
+    // offset: the number of bytes to move from SEEK_END/SEEK_CUR/SEEK_SET
+    // whence: SEEK_END/SEEK_CUR/SEEK_SET
     fseek(file, 0, SEEK_END); // move file pointer to end of file
+    // long ftell(FILE* stream)
     *file_size = ftell(file); // get the file size, in bytes
     fclose(file);
     // memory map the Transformer weights into the data pointer
@@ -157,6 +167,8 @@ void read_checkpoint(char* checkpoint, Config* config, TransformerWeights* weigh
     if (*fd == -1) { fprintf(stderr, "open failed!\n"); exit(EXIT_FAILURE); }
     *data = mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
     if (*data == MAP_FAILED) { fprintf(stderr, "mmap failed!\n"); exit(EXIT_FAILURE); }
+    // sizeof(Config)/sizeof(float): offset to move *data pointer
+    // weights_ptr is the pointer where weights start from
     float* weights_ptr = *data + sizeof(Config)/sizeof(float);
     memory_map_weights(weights, config, weights_ptr, shared_weights);
 }
