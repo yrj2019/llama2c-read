@@ -403,6 +403,7 @@ typedef struct {
     unsigned char byte_pieces[512]; // stores all single-byte strings
 } Tokenizer;
 
+// compare two strings in dictionary-ordered. eg. ABCDEF > abcdef
 int compare_tokens(const void *a, const void *b) {
     return strcmp(((TokenIndex*)a)->str, ((TokenIndex*)b)->str);
 }
@@ -411,9 +412,12 @@ void build_tokenizer(Tokenizer* t, char* tokenizer_path, int vocab_size) {
     // i should have written the vocab_size into the tokenizer file... sigh
     t->vocab_size = vocab_size;
     // malloc space to hold the scores and the strings
+    // vocab is the pointer pointed to the pointer array, which stores the pointers pointed to all strings
     t->vocab = (char**)malloc(vocab_size * sizeof(char*));
+    // vocab_scores is the pointer pointed to a vocab score array
     t->vocab_scores = (float*)malloc(vocab_size * sizeof(float));
     t->sorted_vocab = NULL; // initialized lazily
+    // byte_pieces is for byte-level tokenization,which used for single-byte string tokenization
     for (int i = 0; i < 256; i++) {
         t->byte_pieces[i * 2] = (unsigned char)i;
         t->byte_pieces[i * 2 + 1] = '\0';
@@ -421,13 +425,19 @@ void build_tokenizer(Tokenizer* t, char* tokenizer_path, int vocab_size) {
     // read in the file
     FILE *file = fopen(tokenizer_path, "rb");
     if (!file) { fprintf(stderr, "couldn't load %s\n", tokenizer_path); exit(EXIT_FAILURE); }
+    // the tokenizer.bin file format: max_token_length,vocab_score_0,vocab_len_0,vocab_0,vocab_score_1,vocab_len_1,vocab_1,...
+    // the start of the file is max_token_length,if return value is not 1,it means reach the end of the file or the file is empty
     if (fread(&t->max_token_length, sizeof(int), 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
     int len;
     for (int i = 0; i < vocab_size; i++) {
+        // read vocab_score to vocab_scores
         if (fread(t->vocab_scores + i, sizeof(float), 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE);}
+        // read vocab_len to decide how many bytes will be read to vocab
         if (fread(&len, sizeof(int), 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
+        // malloc memory space to store next vocabulary and read vocabulary from the file
         t->vocab[i] = (char *)malloc(len + 1);
         if (fread(t->vocab[i], len, 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
+        // each vocabulary will be delimitted by the '\0' character
         t->vocab[i][len] = '\0'; // add the string terminating token
     }
     fclose(file);
@@ -486,6 +496,7 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
             t->sorted_vocab[i].str = t->vocab[i];
             t->sorted_vocab[i].id = i;
         }
+        // sort sorted_vocab in dictionary-ordered
         qsort(t->sorted_vocab, t->vocab_size, sizeof(TokenIndex), compare_tokens);
     }
 
@@ -525,6 +536,7 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
         // 0x80 is 10000000
         // in UTF-8, all continuation bytes start with "10" in first two bits
         // so in English this is: "if this byte is not a continuation byte"
+        // continuation is not meaningful without leading byte. the format of leading byte is 11xxxxxx
         if ((*c & 0xC0) != 0x80) {
             // this byte must be either a leading byte (11...) or an ASCII char (0x...)
             // => reset our location, as we're starting a new UTF-8 codepoint

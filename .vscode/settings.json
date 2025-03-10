@@ -1,5 +1,19 @@
 {
     "files.associations": {
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "cstdlib": "cpp",
+        "__config": "c",
+        "algorithm": "c",
+        "__memory": "c",
+        "iterator": "c",
+        "memory_resource": "c",
+        "iosfwd": "c",
+        "istream": "c",
+        "memory": "c",
+        "mutex": "c",
+        "string": "c",
+        "tuple": "c",
+        "utility": "c",
+        "variant": "c"
     }
 }
